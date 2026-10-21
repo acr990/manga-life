@@ -1,0 +1,442 @@
+﻿from flask import Flask, render_template_string, request, redirect, url_for, session
+
+app = Flask(__name__)
+app.secret_key = 'mangajangkar_secret_key'
+
+# Data awal pintasan default
+DEFAULT_SHORTCUTS = [
+    {"name": "Library", "url": "https://www.google.com", "icon": "fa-book", "bg": "bg-orange-100", "color": "text-orange-500"},
+    {"name": "History", "url": "https://archive.org", "icon": "fa-clock", "bg": "bg-orange-500", "color": "text-white"},
+    {"name": "Google", "url": "https://www.google.com", "icon": "fa-google", "bg": "bg-white", "color": "text-blue-500"},
+    {"name": "Komik Cast", "url": "https://komikcast.bz", "icon": "K", "bg": "bg-blue-900", "color": "text-white font-bold"},
+    {"name": "SK", "url": "https://www.bing.com/?adlt=off", "icon": "SK", "bg": "bg-gray-200", "color": "text-gray-600 font-bold"},
+    {"name": "CC", "url": "https://www.bing.com/?adlt=off", "icon": "fa-bell", "bg": "bg-yellow-100", "color": "text-yellow-600"},
+    {"name": "Dou", "url": "https://www.bing.com/?adlt=off", "icon": "D", "bg": "bg-purple-900", "color": "text-purple-200 font-bold"},
+    {"name": "Hihi", "url": "https://www.bing.com/?adlt=off", "icon": "M", "bg": "bg-purple-600", "color": "text-white font-bold"},
+    {"name": "Keikomik", "url": "https://www.bing.com/?adlt=off", "icon": "fa-bolt", "bg": "bg-amber-400", "color": "text-white"}
+]
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Life</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="min-h-screen bg-white flex flex-col justify-between text-gray-800 font-sans select-none overflow-x-hidden">
+
+    {% if view == 'web' %}
+    <!-- HEADER HASIL PENCARIAN / WEB -->
+    <div class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-xs">
+        <div class="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between">
+            <form action="/browse" method="GET" class="flex-grow flex items-center bg-white border border-gray-300 rounded-full shadow-xs px-4 py-2 mr-3 focus-within:ring-1 focus-within:ring-black">
+                <input type="text" name="q" value="{{ query }}" class="w-full text-sm outline-none bg-transparent text-gray-800">
+                <button type="submit" class="text-gray-500 hover:text-black pl-2">
+                    <span class="text-xs font-semibold uppercase">Cari</span>
+                </button>
+            </form>
+            <a href="/" class="text-gray-600 hover:text-black text-sm font-medium px-2">Beranda</a>
+        </div>
+
+        <div class="max-w-4xl mx-auto px-4 flex space-x-6 text-xs sm:text-sm font-medium text-gray-500 overflow-x-auto">
+            <span class="text-blue-600 border-b-2 border-blue-600 pb-2 cursor-pointer">WEB</span>
+            <span class="hover:text-black pb-2 cursor-pointer">YANDEX</span>
+            <span class="hover:text-black pb-2 cursor-pointer">GOOGLE</span>
+            <span class="hover:text-black pb-2 cursor-pointer">SEARCHME</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- KONTEN UTAMA -->
+    <div class="flex-grow flex flex-col pb-36">
+        {% if view == 'home' %}
+        <!-- TAMPILAN BERANDA -->
+        <div class="max-w-md mx-auto w-full p-4 flex flex-col space-y-6">
+            
+            <div class="text-center pt-2">
+                <h1 class="text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">MANGA LIFE</h1>
+            </div>
+
+            <form action="/browse" method="GET" class="relative">
+                <input type="text" name="q" placeholder="Cari manga atau web..." required class="w-full py-3 pl-4 pr-12 bg-gray-50 rounded-full shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-800">
+                <button type="submit" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
+                    <i class="fa-solid fa-camera text-lg"></i>
+                </button>
+            </form>
+
+            <!-- GRID PINTASAN AKTIF -->
+            <div class="grid grid-cols-5 gap-y-4 gap-x-2 text-center text-xs">
+                {% for item in shortcuts %}
+                <div class="flex flex-col items-center space-y-1 group cursor-pointer relative" onclick="location.href='/browse?url={{ item.url }}'" oncontextmenu="showContextMenu(event, '{{ item.name }}', '{{ item.url }}', {{ loop.index0 }})">
+                    <div class="w-12 h-12 {{ item.bg }} rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-105 transition {{ item.color }}">
+                        {% if 'fa-' in item.icon %}
+                            <i class="fa-solid {{ item.icon }} text-xl"></i>
+                        {% else %}
+                            <span class="text-sm font-bold">{{ item.icon }}</span>
+                        {% endif %}
+                    </div>
+                    <span class="text-gray-600 font-medium truncate w-full">{{ item.name }}</span>
+                </div>
+                {% endfor %}
+                
+                <!-- Tombol Tambah Pintasan -->
+                <div class="flex flex-col items-center space-y-1 group cursor-pointer" onclick="openAddModal()">
+                    <div class="w-12 h-12 bg-gray-200/80 rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-105 transition text-gray-500">
+                        <i class="fa-solid fa-plus text-lg"></i>
+                    </div>
+                    <span class="text-gray-600 font-medium">Tambah</span>
+                </div>
+            </div>
+
+            <!-- BARU DIBACA -->
+            <div class="bg-gray-50 rounded-2xl p-4 shadow-xs border border-gray-200 space-y-3">
+                <h2 class="font-bold text-gray-800 text-base">Baru dibaca</h2>
+                {% if history %}
+                    <ul class="space-y-2 text-xs">
+                        {% for h in history[:5] %}
+                        <li class="flex justify-between items-center border-b border-gray-200 pb-1">
+                            <a href="/browse?url={{ h.url }}" class="text-blue-600 truncate max-w-[220px]">{{ h.title }}</a>
+                            <span class="text-gray-400 text-[10px]">{{ h.time }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-sm text-gray-500 py-4 text-center">Belum ada apa pun. Buka situs web untuk mulai membaca</p>
+                {% endif %}
+            </div>
+
+        </div>
+        {% elif view == 'history' %}
+        <!-- HALAMAN RIWAYAT -->
+        <div class="max-w-md mx-auto w-full p-4 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h2 class="font-bold text-lg">Riwayat Penjelajahan</h2>
+                <a href="/clear-history" class="text-xs text-red-500 bg-red-50 px-3 py-1 rounded-full">Hapus Semua</a>
+            </div>
+            <div class="space-y-2">
+                {% if history %}
+                    {% for h in history %}
+                    <div class="bg-gray-50 p-3 rounded-xl flex justify-between items-center border border-gray-100">
+                        <div class="truncate pr-2">
+                            <a href="/browse?url={{ h.url }}" class="text-sm font-medium text-blue-600 block truncate">{{ h.title }}</a>
+                            <span class="text-xs text-gray-400 block truncate">{{ h.url }}</span>
+                        </div>
+                        <span class="text-[10px] text-gray-400 whitespace-nowrap">{{ h.time }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-center text-gray-400 py-10">Belum ada riwayat penjelajahan.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% elif view == 'bookmarks' %}
+        <!-- HALAMAN BOOKMARK -->
+        <div class="max-w-md mx-auto w-full p-4 space-y-4">
+            <div class="border-b pb-2">
+                <h2 class="font-bold text-lg">Daftar Bookmark</h2>
+            </div>
+            <div class="space-y-2">
+                {% if bookmarks %}
+                    {% for b in bookmarks %}
+                    <div class="bg-gray-50 p-3 rounded-xl flex justify-between items-center border border-gray-100">
+                        <a href="/browse?url={{ b.url }}" class="text-sm font-medium text-blue-600 truncate">{{ b.name }} ({{ b.url }})</a>
+                        <a href="/remove-bookmark?index={{ loop.index0 }}" class="text-red-500 text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-center text-gray-400 py-10">Belum ada bookmark tersimpan.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% elif view == 'downloads' %}
+        <!-- HALAMAN UNDUHAN -->
+        <div class="max-w-md mx-auto w-full p-4 space-y-4">
+            <div class="border-b pb-2"><h2 class="font-bold text-lg">Unduhan</h2></div>
+            <p class="text-center text-gray-400 py-10">Belum ada file yang diunduh.</p>
+        </div>
+        {% else %}
+        <!-- TAMPILAN IFRAME WEB -->
+        <div class="flex-grow w-full h-[calc(100vh-170px)] bg-white">
+            <iframe src="{{ url }}" class="w-full h-full border-none"></iframe>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- MODAL TAMBAH KE BERANDA (Sesuai Gambar 12) -->
+    <div id="addModal" class="fixed inset-0 bg-black/40 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 space-y-4">
+            <h3 class="font-bold text-gray-800 text-base">Tambahkan ke beranda</h3>
+            <form action="/add-shortcut" method="POST" class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Nama</label>
+                    <input type="text" name="name" placeholder="Masukkan nama" required class="w-full p-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">URL</label>
+                    <input type="text" name="url" placeholder="Masukkan URL" required class="w-full p-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" onclick="closeAddModal()" class="text-blue-600 text-xs font-semibold px-4 py-2">Batal</button>
+                    <button type="submit" class="text-blue-600 text-xs font-semibold px-4 py-2">Konfirmasi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL MENU KONTEKS PINTASAN (Sesuai Gambar 10) -->
+    <div id="shortcutContextMenu" class="fixed inset-0 bg-black/40 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-64 overflow-hidden py-2 text-sm text-gray-700">
+            <div id="ctxTitle" class="px-5 py-2.5 font-bold text-gray-900 border-b border-gray-100 text-xs">Nama Item</div>
+            <div onclick="ctxAction('hide')" class="px-5 py-2.5 hover:bg-gray-50 cursor-pointer">Sembunyikan</div>
+            <div onclick="ctxAction('edit')" class="px-5 py-2.5 hover:bg-gray-50 cursor-pointer">Edit bookmark</div>
+            <div onclick="ctxAction('copy')" class="px-5 py-2.5 hover:bg-gray-50 cursor-pointer">Salin URL</div>
+            <div onclick="ctxAction('delete')" class="px-5 py-2.5 hover:bg-gray-50 cursor-pointer text-red-500">Hapus</div>
+            <div onclick="ctxAction('order')" class="px-5 py-2.5 hover:bg-gray-50 cursor-pointer border-t border-gray-100">Sesuaikan urutan</div>
+        </div>
+    </div>
+
+    <!-- GRID MENU UTAMA (Tombol Garis Tiga Bawah) -->
+    <div id="mainMenuPopup" class="fixed inset-0 bg-black/40 backdrop-blur-xs hidden items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+        <div class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-md overflow-hidden p-4">
+            <div class="flex justify-between items-center pb-3 border-b border-gray-100 mb-4">
+                <span class="font-semibold text-gray-800 text-sm">Menu Manga Life</span>
+                <button onclick="toggleMenu()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="grid grid-cols-5 gap-y-5 gap-x-2 text-center text-xs text-gray-700">
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="alert('Tab aktif: 1')"><i class="fa-regular fa-window-maximize text-xl text-gray-600"></i><span>Tab</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="location.href='/bookmarks'"><i class="fa-regular fa-star text-xl text-gray-600"></i><span>Bookmark</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="location.href='/history'"><i class="fa-regular fa-clock text-xl text-gray-600"></i><span>Riwayat</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer text-gray-300"><i class="fa-regular fa-newspaper text-xl"></i><span>Mode baca</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="location.reload()"><i class="fa-solid fa-rotate-right text-xl text-gray-600"></i><span>Muat ulang</span></div>
+                
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="openAddModal()"><i class="fa-solid fa-plus text-xl text-gray-600"></i><span>Tambahkan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer text-gray-300"><i class="fa-solid fa-user-gear text-xl"></i><span>Agen</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="alert('Mode Penjelajahan Privat Aktif')"><i class="fa-solid fa-user-secret text-xl text-gray-600"></i><span>Penjelajahan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer text-gray-300"><i class="fa-regular fa-circle-exclamation text-xl"></i><span>Laporkan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer text-gray-300"><i class="fa-solid fa-ban text-xl"></i><span>Blokir paksa</span></div>
+
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="location.href='/downloads'"><i class="fa-solid fa-download text-xl text-gray-600"></i><span>Unduhan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="alert('Kirim masukan ke pengembang')"><i class="fa-regular fa-envelope text-xl text-gray-600"></i><span>Masukan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="alert('Tautan disalin')"><i class="fa-solid fa-share-nodes text-xl text-gray-600"></i><span>Bagikan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer text-blue-600" onclick="toggleSettings()"><i class="fa-solid fa-gear text-xl"></i><span>Pengaturan</span></div>
+                <div class="flex flex-col items-center space-y-1 cursor-pointer" onclick="alert('Keluar aplikasi')"><i class="fa-solid fa-right-from-bracket text-xl text-gray-600"></i><span>Keluar</span></div>
+            </div>
+
+            <!-- Sub-Menu Pengaturan SafeSearch -->
+            <div id="settingsSubMenu" class="mt-4 pt-3 border-t border-gray-100 hidden">
+                <div class="flex items-center justify-between bg-gray-50 p-2.5 rounded-xl">
+                    <span class="text-xs font-medium text-gray-700">Filter Konten (SafeSearch OFF)</span>
+                    <div onclick="toggleSearchme()" id="searchmeToggle" class="w-8 h-5 bg-blue-600 rounded-full relative cursor-pointer transition-colors">
+                        <div id="searchmeDot" class="w-3 h-3 bg-white rounded-full absolute top-1 right-1 transition-transform"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 text-center">
+                <button onclick="toggleMenu()" class="text-xs text-gray-600 font-semibold px-4 py-1.5 bg-gray-100 rounded-full hover:bg-gray-200 transition">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BILAH NAVIGASI BAWAH -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-3 max-w-md mx-auto w-full shadow-lg flex flex-col space-y-1 z-40">
+        
+        <div class="flex items-center justify-between px-2">
+            <button onclick="history.back()" class="text-gray-500 hover:text-gray-800 p-2"><i class="fa-solid fa-chevron-left text-lg"></i></button>
+            <button onclick="history.forward()" class="text-gray-300 hover:text-gray-600 p-2"><i class="fa-solid fa-chevron-right text-lg"></i></button>
+            
+            <form action="/browse" method="GET" class="flex-grow mx-3">
+                <input type="text" name="q" placeholder="{{ query if query else 'Cari manga...' }}" class="w-full py-1.5 px-4 bg-gray-100 rounded-full text-center text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400">
+            </form>
+
+            <a href="/" class="text-gray-600 hover:text-blue-600 p-2"><i class="fa-solid fa-house text-lg"></i></a>
+            <button onclick="toggleMenu()" class="text-gray-600 hover:text-blue-600 p-2"><i class="fa-solid fa-bars text-lg"></i></button>
+        </div>
+
+        <div class="flex items-center justify-around text-gray-500 pt-1 border-t border-gray-100 text-sm">
+            <button onclick="toggleMenu()"><i class="fa-solid fa-bars"></i></button>
+            <button onclick="location.href='/'"><i class="fa-regular fa-circle"></i></button>
+            <button onclick="history.back()"><i class="fa-solid fa-rotate-left"></i></button>
+        </div>
+    </div>
+
+    <script>
+        let currentUrl = '';
+        let currentName = '';
+        let currentIndex = -1;
+
+        function showContextMenu(event, name, url, index) {
+            event.preventDefault();
+            currentName = name;
+            currentUrl = url;
+            currentIndex = index;
+            document.getElementById('ctxTitle').innerText = name;
+            const modal = document.getElementById('shortcutContextMenu');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function ctxAction(action) {
+            if (action === 'delete') {
+                window.location.href = '/delete-shortcut?index=' + currentIndex;
+            } else if (action === 'copy') {
+                navigator.clipboard.writeText(currentUrl);
+                alert('URL disalin ke klipboard: ' + currentUrl);
+            } else if (action === 'hide') {
+                alert('Pintasan disembunyikan');
+            } else {
+                alert(action + ' untuk ' + currentName);
+            }
+            document.getElementById('shortcutContextMenu').classList.add('hidden');
+            document.getElementById('shortcutContextMenu').classList.remove('flex');
+        }
+
+        window.onclick = function(event) {
+            const ctxModal = document.getElementById('shortcutContextMenu');
+            if (event.target == ctxModal) {
+                ctxModal.classList.add('hidden');
+                ctxModal.classList.remove('flex');
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('addModal').classList.remove('hidden');
+            document.getElementById('addModal').classList.add('flex');
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').classList.add('hidden');
+            document.getElementById('addModal').classList.remove('flex');
+        }
+
+        function toggleMenu() {
+            const menu = document.getElementById('mainMenuPopup');
+            menu.classList.toggle('hidden');
+            menu.classList.toggle('flex');
+        }
+
+        function toggleSettings() {
+            document.getElementById('settingsSubMenu').classList.toggle('hidden');
+        }
+
+        let searchmeActive = true;
+        function toggleSearchme() {
+            searchmeActive = !searchmeActive;
+            const toggleBg = document.getElementById('searchmeToggle');
+            const dot = document.getElementById('searchmeDot');
+            if (searchmeActive) {
+                toggleBg.classList.remove('bg-gray-300');
+                toggleBg.classList.add('bg-blue-600');
+                dot.style.transform = 'translateX(0px)';
+            } else {
+                toggleBg.classList.remove('bg-blue-600');
+                toggleBg.classList.add('bg-gray-300');
+                dot.style.transform = 'translateX(-12px)';
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    if 'shortcuts' not in session:
+        session['shortcuts'] = DEFAULT_SHORTCUTS
+    if 'history' not in session:
+        session['history'] = []
+    if 'bookmarks' not in session:
+        session['bookmarks'] = []
+    
+    return render_template_string(HTML_TEMPLATE, view='home', shortcuts=session['shortcuts'], history=session['history'], bookmarks=session['bookmarks'], query='', url='')
+
+@app.route("/browse")
+def browse():
+    query = request.args.get('q', '')
+    target_url = request.args.get('url', '')
+    
+    if 'history' not in session:
+        session['history'] = []
+        
+    if query:
+        url = f"https://www.bing.com/search?q={query}&adlt=off"
+        title = f"Pencarian: {query}"
+    elif target_url:
+        url = target_url
+        title = target_url
+    else:
+        url = "https://www.bing.com/?adlt=off"
+        title = "Bing Search"
+        
+    # Catat ke riwayat dan baru dibaca secara otomatis
+    import datetime
+    time_str = datetime.datetime.now().strftime("%d/%m %H:%M")
+    history_item = {"title": title, "url": url, "time": time_str}
+    
+    # Masukkan ke urutan teratas history
+    hist = session['history']
+    if history_item not in hist:
+        hist.insert(0, history_item)
+        session['history'] = hist
+        session.modified = True
+
+    return render_template_string(HTML_TEMPLATE, view='web', shortcuts=session.get('shortcuts', DEFAULT_SHORTCUTS), history=session['history'], bookmarks=session.get('bookmarks', []), query=query, url=url)
+
+@app.route("/history")
+def history_page():
+    return render_template_string(HTML_TEMPLATE, view='history', shortcuts=session.get('shortcuts', DEFAULT_SHORTCUTS), history=session.get('history', []), bookmarks=session.get('bookmarks', []), query='', url='')
+
+@app.route("/clear-history")
+def clear_history():
+    session['history'] = []
+    return redirect(url_for('history_page'))
+
+@app.route("/bookmarks")
+def bookmarks_page():
+    return render_template_string(HTML_TEMPLATE, view='bookmarks', shortcuts=session.get('shortcuts', DEFAULT_SHORTCUTS), history=session.get('history', []), bookmarks=session.get('bookmarks', []), query='', url='')
+
+@app.route("/remove-bookmark")
+def remove_bookmark():
+    idx = request.args.get('index', type=int)
+    bm = session.get('bookmarks', [])
+    if idx is not None and 0 <= idx < len(bm):
+        bm.pop(idx)
+        session['bookmarks'] = bm
+        session.modified = True
+    return redirect(url_for('bookmarks_page'))
+
+@app.route("/downloads")
+def downloads_page():
+    return render_template_string(HTML_TEMPLATE, view='downloads', shortcuts=session.get('shortcuts', DEFAULT_SHORTCUTS), history=session.get('history', []), bookmarks=session.get('bookmarks', []), query='', url='')
+
+@app.route("/add-shortcut", methods=['POST'])
+def add_shortcut():
+    name = request.form.get('name')
+    url = request.form.get('url')
+    if name and url:
+        if 'shortcuts' not in session:
+            session['shortcuts'] = DEFAULT_SHORTCUTS
+        new_item = {"name": name, "url": url, "icon": name[:2].upper(), "bg": "bg-indigo-100", "color": "text-indigo-600 font-bold"}
+        session['shortcuts'].append(new_item)
+        session.modified = True
+    return redirect(url_for('home'))
+
+@app.route("/delete-shortcut")
+def delete_shortcut():
+    idx = request.args.get('index', type=int)
+    sc = session.get('shortcuts', DEFAULT_SHORTCUTS)
+    if idx is not None and 0 <= idx < len(sc):
+        sc.pop(idx)
+        session['shortcuts'] = sc
+        session.modified = True
+    return redirect(url_for('home'))
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
